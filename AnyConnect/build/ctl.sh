@@ -8,6 +8,7 @@ Config="${ConfigPath}/ocserv.conf"
 
 TCP=`cat "${Config}" |grep '^#\?tcp-port' |cut -d"=" -f2 |grep -o '[0-9]*' |head -n1`
 UDP=`cat "${Config}" |grep '^#\?udp-port' |cut -d"=" -f2 |grep -o '[0-9]*' |head -n1`
+NET=`cat "${Config}" |grep '^ipv4-network' |cut -d"=" -f2 |grep -o '[0-9\.]*' |head -n1`
 
 function GetAddress(){
   echo `wget --no-check-certificate --timeout=3 --no-cache -4 -qO- "http://checkip.amazonaws.com" |grep -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' |head -n1`
@@ -24,19 +25,30 @@ function IPTABLES(){
 }
 
 function GenPasswd(){
-  echo -n >${ConfigPath}/ocpasswd
+  echo -ne "\nUserName\tPassword\tGROUP\n\n"
   RawPasswd="${1:-MoeClub}"
-  UserPasswd=`openssl passwd ${RawPasswd}`
-  titleNum=0
-  for GP in `find "${ConfigPath}/group" -type f`
-    do
-      [ -n "$GP" ] || continue
-      user=`basename "$GP"`
-      [ -n "$user" ] || continue
-      [ "$titleNum" -le "0" ] && titleNum=$(($titleNum + 1)) && echo -ne "\nUserName\tPassword\tGROUP\n\n"
-      echo -ne "${user}\t\t${RawPasswd}\t\t${user}\n"
-      echo -ne "${user}:${user}:${UserPasswd}\n" >>${ConfigPath}/ocpasswd
-    done
+  if [ `echo "${RawPasswd}" |grep -o ':' |grep -c ':'` == "2" ]; then
+    echo "${RawPasswd}" |grep -q '^-' && echo -n >${ConfigPath}/ocpasswd
+    User=`echo "${RawPasswd}"| cut -d':' -f1 |sed 's/[[:space:]]//g' |tr -d '-'`
+    UserPasswd=`echo "${RawPasswd}"| cut -d':' -f2 |sed 's/[[:space:]]//g'`
+    UserGroup=`echo "${RawPasswd}"| cut -d':' -f3 |sed 's/[[:space:]]//g'`
+    [ -n "$User" ] && [ -n "$UserPasswd" ] && [ -n "$UserGroup" ] || { echo -ne "ERROR: Invalid ARG\n" && return 1; }
+    [ -f "${ConfigPath}/group/${UserGroup}" ] || { echo -ne "ERROR: Invalid Group\n" && return 1; }
+    SaltPasswd=`openssl passwd ${UserPasswd}`
+    echo -ne "${User}\t\t${UserPasswd}\t\t${UserGroup}\n"
+    echo -ne "${User}:${UserGroup}:${SaltPasswd}\n" >>${ConfigPath}/ocpasswd
+  else
+    echo -n >${ConfigPath}/ocpasswd
+    UserPasswd=`openssl passwd ${RawPasswd}`
+    for GroupName in `find "${ConfigPath}/group" -type f`
+      do
+        [ -n "$GroupName" ] || continue
+        User=`basename "$GroupName"`
+        [ -n "$User" ] || continue
+        echo -ne "${User}\t\t${RawPasswd}\t\t${User}\n"
+        echo -ne "${User}:${User}:${UserPasswd}\n" >>${ConfigPath}/ocpasswd
+      done
+  fi
   chmod 755 ${ConfigPath}/ocpasswd
 }
 
@@ -75,9 +87,14 @@ Ether=`ip route show default |head -n1 |sed 's/.*dev\s*\([0-9a-zA-Z]\+\).*/\1/g'
 [ -f "${ConfigPath}/group/NoRoute" ] && Address="$(GetAddress)" && [ -n "$Address" ] &&  sed -i "s/^no-route\s*=\s*.*\/255.255.255.255/no-route = ${Address}\/255.255.255.255/" "${ConfigPath}/group/NoRoute"
 
 IPTABLES "iptables -t nat -A POSTROUTING -o ${Ether} -j MASQUERADE"
+[ -n "$NET" ] && IPTABLES "iptables -I FORWARD -d ${NET}/24 -j ACCEPT"
+[ -n "$NET" ] && IPTABLES "iptables -I FORWARD -s ${NET}/24 -j ACCEPT"
 IPTABLES "iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+[ -n "$NET" ] && IPTABLES "iptables -I OUTPUT -d ${NET}/24 -j ACCEPT"
+[ -n "$NET" ] && IPTABLES "iptables -I INPUT -s ${NET}/24 -j ACCEPT"
 [ -n "$TCP" ] && [ "$TCP" -gt "0" ] && IPTABLES "iptables -I INPUT -p tcp --dport ${TCP} -j ACCEPT"
 [ -n "$UDP" ] && [ "$UDP" -gt "0" ] && IPTABLES "iptables -I INPUT -p udp --dport ${UDP} -j ACCEPT"
+
 
 [ `cat /proc/sys/net/ipv4/ip_forward` != "1" ] && echo "1" >/proc/sys/net/ipv4/ip_forward
 

@@ -1,10 +1,6 @@
-# build
+# install
 ```
-bash <(curl -sSL "https://raw.githubusercontent.com/MoeClub/Note/master/qBittorrent/qbittorrent-nox-static.sh") all -i -c -qt release-4.4.2 -lt v2.0.6
-
-rm -rf /tmp/qbittorrent && cp ~/qbt-build/bin/qbittorrent-nox /tmp/qbittorrent && cd /tmp
-XZ_OPT=-9 tar -Jcvf /tmp/qbittorrent_$(uname -m)_v4.4.2_lt_v2.0.6.tar.xz  qbittorrent
-
+bash <(wget -qO- "https://github.com/MoeClub/Note/raw/master/qBittorrent/install.sh")
 
 ```
 
@@ -28,3 +24,14 @@ XZ_OPT=-9 tar -Jcvf /tmp/qbittorrent_$(uname -m)_v4.4.2_lt_v2.0.6.tar.xz  qbitto
 	}
 
 ```
+
+# build
+```
+bash <(curl -sSL "https://raw.githubusercontent.com/MoeClub/Note/master/qBittorrent/qbittorrent-nox-static.sh") all -i -c -qt release-4.4.2 -lt v2.0.6
+
+rm -rf /tmp/qbittorrent && cp ~/qbt-build/bin/qbittorrent-nox /tmp/qbittorrent && cd /tmp
+XZ_OPT=-9 tar -Jcvf /tmp/qbittorrent_$(uname -m)_v4.4.2_lt_v2.0.6.tar.xz  qbittorrent
+
+
+```
+
